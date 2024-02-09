@@ -1,5 +1,6 @@
+### 打印函数
 
-打印函数
+```
 enum {
 	MSG_EXCESSIVE, MSG_MSGDUMP, MSG_DEBUG, MSG_INFO, MSG_WARNING, MSG_ERROR
 };
@@ -52,8 +53,11 @@ void wpa_printf(int level, const char *fmt, ...)
 	}
 #endif /* CONFIG_DEBUG_LINUX_TRACING */
 }
+```
 
-16进制打印
+### 16进制打印
+
+```
 // 以16进制打印数据
 static void _wpa_hexdump(int level, const char *title, const u8 *buf,
 			 size_t len, int show, int only_syslog)
@@ -68,10 +72,11 @@ static void _wpa_hexdump(int level, const char *title, const u8 *buf,
 			printf(" [REMOVED]");
 		}
 		printf("\n");
+```
 
+### assic码打印
 
-assic码打印
-
+```
 // assic码打印
 static void _wpa_hexdump_ascii(int level, const char *title, const void *buf,
 			       size_t len, int show)
@@ -127,3 +132,4 @@ void wpa_hexdump_ascii(int level, const char *title, const void *buf,
 {
 	_wpa_hexdump_ascii(level, title, buf, len, 1);
 }
+```
