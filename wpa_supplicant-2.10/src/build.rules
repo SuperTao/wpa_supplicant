@@ -1,0 +1,128 @@
+.PHONY: all
+all: _all
+
+# disable built-in rules
+.SUFFIXES:
+
+# setup some variables
+# make程序在读取多个makefile文件时，包括由环境变量"MAKEFILES"指定、
+# 命令行指定、当前工作下的默认的以及使用指示符“include”指定包含的，
+# 在这些文件进行解析执行之前make读取的文件名将会被自动依次追加到变量"MAKEFILE_LIST"的定义域中。
+# 这样我们就可以通过测试此变量的最后一个字来获取当前make程序正在处理的makefile文件名。
+# 具体的说就是在一个makefile文件中如果使用指示符"include"包含另一个文件之后，
+# 变量"MAKEFILE_LIST"的最后一个字只可能是指示符"include"指定所要包含的那个文件的名字。
+# lastword提取变量最后一个元素
+# dir获取路径名称
+# $(ROOTDIR:%../src/=%)与patsubst函数用法一样，将ROOTDIR中，满足%../src/都替换成%
+ROOTDIR := $(dir $(lastword $(MAKEFILE_LIST)))
+ROOTDIR := $(dir $(ROOTDIR:%../src/=%))../
+# 获取绝对路径，编译目录
+BUILDDIR ?= $(abspath $(ROOTDIR)build)
+# 给路径末尾添加'/'
+BUILDDIR := $(BUILDDIR:%/=%)
+ABSROOT := $(abspath $(ROOTDIR))
+ifeq ($(origin OUT),command line)
+_PROJ := $(OUT:%/=%)
+_PROJ := $(_PROJ:$(BUILDDIR)/%=%)
+else
+_PROJ := $(abspath $(dir $(firstword $(MAKEFILE_LIST))))
+_PROJ := $(_PROJ:$(ABSROOT)/%=%)
+endif
+
+ifndef CC
+CC=gcc
+endif
+
+ifndef RANLIB
+RANLIB=ranlib
+endif
+
+ifndef LDO
+LDO=$(CC)
+endif
+
+ifndef CFLAGS
+# -MM选项，-MM生成文件以来关系，但是不包含标准库头文件
+# -D选项，生成的以来关系输出到以.d为后缀的文件。文件名称由-O指定
+CFLAGS = -MMD -O2 -Wall -g
+endif
+# 添加config文件
+ifneq ($(CONFIG_FILE),)
+-include $(CONFIG_FILE)
+
+# export for sub-makefiles
+export CONFIG_CODE_COVERAGE
+# .config检查
+.PHONY: verify_config
+verify_config:
+	@if [ ! -r $(CONFIG_FILE) ]; then \
+		echo 'Building $(firstword $(ALL)) requires a configuration file'; \
+		echo '(.config). See README for more instructions. You can'; \
+		echo 'run "cp defconfig .config" to create an example'; \
+		echo 'configuration.'; \
+		exit 1; \
+	fi
+VERIFY := verify_config
+else
+VERIFY :=
+endif
+
+# default target
+.PHONY: _all
+_all: $(VERIFY) $(ALL) $(EXTRA_TARGETS)
+
+# continue setup
+COVSUFFIX := $(if $(CONFIG_CODE_COVERAGE),-cov,)
+PROJ := $(_PROJ)$(COVSUFFIX)
+
+Q=@
+E=echo
+ifeq ($(V), 1)
+Q=
+E=true
+endif
+ifeq ($(QUIET), 1)
+Q=@
+E=true
+endif
+
+ifeq ($(Q),@)
+MAKEFLAGS += --no-print-directory
+endif
+
+_DIRS := $(BUILDDIR)/$(PROJ)
+.PHONY: _make_dirs
+_make_dirs:
+	@mkdir -p $(_DIRS)
+# 此处就是真正的生成语法了，表示了.o文件如何通过.c文件生成
+# 在目录中找.c文件，编译的.o文件产物都放到build目录对应的子目录中
+# src目录的.o规则
+$(BUILDDIR)/$(PROJ)/src/%.o: $(ROOTDIR)src/%.c $(CONFIG_FILE) | _make_dirs
+	$(Q)$(CC) -c -o $@ $(CFLAGS) $<
+	@$(E) "  CC " $<
+
+# $(PROJ)/.o生成规则，
+$(BUILDDIR)/$(PROJ)/%.o: %.c $(CONFIG_FILE) | _make_dirs
+	$(Q)$(CC) -c -o $@ $(CFLAGS) $<
+	@$(E) "  CC " $<
+# for the fuzzing tests
+$(BUILDDIR)/$(PROJ)/wpa_supplicant/%.o: $(ROOTDIR)wpa_supplicant/%.c $(CONFIG_FILE) | _make_dirs
+	$(Q)$(CC) -c -o $@ $(CFLAGS) $<
+	@$(E) "  CC " $<
+
+# libraries - they know how to build themselves
+# (lib_phony so we recurse all the time)
+.PHONY: lib_phony
+lib_phony:
+# nothing
+# .a生成规则
+$(BUILDDIR)/$(PROJ)/%.a: $(CONFIG_FILE) lib_phony
+	$(Q)$(MAKE) -C $(ROOTDIR)$(dir $(@:$(BUILDDIR)/$(PROJ)/%=%)) OUT=$(abspath $(dir $@))/
+# 编译函数
+# $(1)的参数进行替换，在ROOTDIR目录下的，都去掉路径, $(1)就是需要编译的一堆.o文件
+# 将所有的文件都放到$(BUILDDIR)/$(PROJ)目录
+BUILDOBJ = $(patsubst %,$(BUILDDIR)/$(PROJ)/%,$(patsubst $(ROOTDIR)%,%,$(1)))
+
+.PHONY: common-clean
+common-clean:
+	$(Q)rm -rf $(ALL) $(BUILDDIR)/$(PROJ)
