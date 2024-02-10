@@ -1,3 +1,10 @@
+### eloop
+
+* 使用epoll/kqueue/select循环检查timeout, read, write, exception表中的异常
+
+* 获取timeout链表中的超时事件,提取最近的超时事件，判断是否有事件超时。超时就运行超时函数，并将事件移除，等待select下一次超时。
+
+* 监听readers, writers，exception table中的变化, 执行对应的函数
 
 src/utils/eloop.c
 ```
