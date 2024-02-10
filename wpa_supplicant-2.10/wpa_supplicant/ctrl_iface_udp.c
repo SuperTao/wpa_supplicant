@@ -238,6 +238,7 @@ static void wpa_supplicant_ctrl_iface_receive(int sock, void *eloop_ctx,
 	buf = os_malloc(CTRL_IFACE_MAX_LEN + 1);
 	if (!buf)
 		return;
+// 接收数据，地址保存在from中
 	res = recvfrom(sock, buf, CTRL_IFACE_MAX_LEN, 0,
 		       (struct sockaddr *) &from, &fromlen);
 	if (res < 0) {
@@ -278,7 +279,7 @@ static void wpa_supplicant_ctrl_iface_receive(int sock, void *eloop_ctx,
 		return;
 	}
 	buf[res] = '\0';
-
+// 处理GET_COOKIE
 	if (os_strcmp(buf, "GET_COOKIE") == 0) {
 		reply = wpa_supplicant_ctrl_iface_get_cookie(priv, &reply_len);
 		goto done;
@@ -337,19 +338,23 @@ static void wpa_supplicant_ctrl_iface_receive(int sock, void *eloop_ctx,
 		else
 			reply_len = 2;
 	} else {
+// 处理wpa_cli的各种命令
 		reply = wpa_supplicant_ctrl_iface_process(wpa_s, pos,
 							  &reply_len);
 	}
 
  done:
 	if (reply) {
+// 返回数据
 		sendto(sock, reply, reply_len, 0, (struct sockaddr *) &from,
 		       fromlen);
 		os_free(reply);
 	} else if (reply_len == 1) {
+// 返回FAIL
 		sendto(sock, "FAIL\n", 5, 0, (struct sockaddr *) &from,
 		       fromlen);
 	} else if (reply_len == 2) {
+// 返回OK
 		sendto(sock, "OK\n", 3, 0, (struct sockaddr *) &from,
 		       fromlen);
 	}
@@ -391,6 +396,7 @@ static void wpa_supplicant_ctrl_iface_msg_cb(void *ctx, int level,
 }
 
 
+// 接口初始化
 struct ctrl_iface_priv *
 wpa_supplicant_ctrl_iface_init(struct wpa_supplicant *wpa_s)
 {
@@ -475,7 +481,7 @@ try_again:
 #ifdef CONFIG_CTRL_IFACE_UDP_REMOTE
 	wpa_msg(wpa_s, MSG_DEBUG, "ctrl_iface_init UDP port: %d", port);
 #endif /* CONFIG_CTRL_IFACE_UDP_REMOTE */
-
+	// 回调函数注册
 	eloop_register_read_sock(priv->sock, wpa_supplicant_ctrl_iface_receive,
 				 wpa_s, priv);
 	wpa_msg_register_cb(wpa_supplicant_ctrl_iface_msg_cb);
@@ -679,7 +685,7 @@ static void wpa_supplicant_global_ctrl_iface_receive(int sock, void *eloop_ctx,
 		return;
 	}
 	buf[res] = '\0';
-
+// 获取cookie返回
 	if (os_strcmp(buf, "GET_COOKIE") == 0) {
 		reply = wpa_supplicant_global_get_cookie(priv, &reply_len);
 		goto done;
@@ -723,6 +729,7 @@ static void wpa_supplicant_global_ctrl_iface_receive(int sock, void *eloop_ctx,
 		else
 			reply_len = 2;
 	} else {
+// 处理其他的wpa_cli命令
 		reply = wpa_supplicant_global_ctrl_iface_process(global, pos,
 								 &reply_len);
 	}
@@ -733,9 +740,11 @@ static void wpa_supplicant_global_ctrl_iface_receive(int sock, void *eloop_ctx,
 		       fromlen);
 		os_free(reply);
 	} else if (reply_len == 1) {
+// 返回FAIL
 		sendto(sock, "FAIL\n", 5, 0, (struct sockaddr *) &from,
 		       fromlen);
 	} else if (reply_len == 2) {
+// 返回OK
 		sendto(sock, "OK\n", 3, 0, (struct sockaddr *) &from,
 		       fromlen);
 	}

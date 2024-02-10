@@ -66,8 +66,8 @@ struct wpa_ctrl {
 #endif /* CONFIG_CTRL_IFACE_UDP */
 #ifdef CONFIG_CTRL_IFACE_UNIX
 	int s;
-	struct sockaddr_un local;
-	struct sockaddr_un dest;
+	struct sockaddr_un local;	// 本地域套接字
+	struct sockaddr_un dest;	// 本地域套接字
 #endif /* CONFIG_CTRL_IFACE_UNIX */
 #ifdef CONFIG_CTRL_IFACE_NAMED_PIPE
 	HANDLE pipe;
@@ -107,7 +107,7 @@ struct wpa_ctrl * wpa_ctrl_open2(const char *ctrl_path,
 	ctrl = os_zalloc(sizeof(*ctrl));
 	if (ctrl == NULL)
 		return NULL;
-
+	// 创建UDP socket
 	ctrl->s = socket(PF_UNIX, SOCK_DGRAM, 0);
 	if (ctrl->s < 0) {
 		os_free(ctrl);
@@ -117,6 +117,7 @@ struct wpa_ctrl * wpa_ctrl_open2(const char *ctrl_path,
 	ctrl->local.sun_family = AF_UNIX;
 	counter++;
 try_again:
+	// 本地通信socket的文件名称，源地址
 	if (cli_path && cli_path[0] == '/') {
 		ret = os_snprintf(ctrl->local.sun_path,
 				  sizeof(ctrl->local.sun_path),
@@ -129,6 +130,7 @@ try_again:
 				  CONFIG_CTRL_IFACE_CLIENT_PREFIX "%d-%d",
 				  (int) getpid(), counter);
 	}
+	// 判断长度是否超过最大值
 	if (os_snprintf_error(sizeof(ctrl->local.sun_path), ret)) {
 		close(ctrl->s);
 		os_free(ctrl);
@@ -148,6 +150,7 @@ try_again:
 	 * no-deference-symlinks version to avoid races. */
 	fchmod(ctrl->s, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 #endif /* ANDROID */
+	// 绑定
 	if (bind(ctrl->s, (struct sockaddr *) &ctrl->local,
 		    sizeof(ctrl->local)) < 0) {
 		if (errno == EADDRINUSE && tries < 2) {
@@ -204,7 +207,7 @@ try_again:
 		return ctrl;
 	}
 #endif /* ANDROID */
-
+	// 通信目的地址的文件名称
 	ctrl->dest.sun_family = AF_UNIX;
 	if (os_strncmp(ctrl_path, "@abstract:", 10) == 0) {
 		ctrl->dest.sun_path[0] = '\0';
@@ -219,6 +222,7 @@ try_again:
 			return NULL;
 		}
 	}
+	// udp连接
 	if (connect(ctrl->s, (struct sockaddr *) &ctrl->dest,
 		    sizeof(ctrl->dest)) < 0) {
 		close(ctrl->s);
@@ -231,6 +235,7 @@ try_again:
 	 * Make socket non-blocking so that we don't hang forever if
 	 * target dies unexpectedly.
 	 */
+	// 设置非阻塞
 	flags = fcntl(ctrl->s, F_GETFL);
 	if (flags >= 0) {
 		flags |= O_NONBLOCK;
@@ -312,7 +317,7 @@ struct wpa_ctrl * wpa_ctrl_open(const char *ctrl_path)
 #ifdef CONFIG_CTRL_IFACE_UDP_REMOTE
 	struct hostent *h;
 #endif /* CONFIG_CTRL_IFACE_UDP_REMOTE */
-
+// 空间申请
 	ctrl = os_zalloc(sizeof(*ctrl));
 	if (ctrl == NULL)
 		return NULL;
@@ -320,6 +325,7 @@ struct wpa_ctrl * wpa_ctrl_open(const char *ctrl_path)
 #ifdef CONFIG_CTRL_IFACE_UDP_IPV6
 	ctrl->s = socket(PF_INET6, SOCK_DGRAM, 0);
 #else /* CONFIG_CTRL_IFACE_UDP_IPV6 */
+// 创建socket
 	ctrl->s = socket(PF_INET, SOCK_DGRAM, 0);
 #endif /* CONFIG_CTRL_IFACE_UDP_IPV6 */
 	if (ctrl->s < 0) {
@@ -338,12 +344,13 @@ struct wpa_ctrl * wpa_ctrl_open(const char *ctrl_path)
 #else /* CONFIG_CTRL_IFACE_UDP_IPV6 */
 	ctrl->local.sin_family = AF_INET;
 #ifdef CONFIG_CTRL_IFACE_UDP_REMOTE
+// 远端地址设置
 	ctrl->local.sin_addr.s_addr = INADDR_ANY;
 #else /* CONFIG_CTRL_IFACE_UDP_REMOTE */
 	ctrl->local.sin_addr.s_addr = htonl((127 << 24) | 1);
 #endif /* CONFIG_CTRL_IFACE_UDP_REMOTE */
 #endif /* CONFIG_CTRL_IFACE_UDP_IPV6 */
-
+// 绑定
 	if (bind(ctrl->s, (struct sockaddr *) &ctrl->local,
 		 sizeof(ctrl->local)) < 0) {
 		close(ctrl->s);
@@ -418,7 +425,7 @@ struct wpa_ctrl * wpa_ctrl_open(const char *ctrl_path)
 	} else
 		ctrl->remote_ip = os_strdup("localhost");
 #endif /* CONFIG_CTRL_IFACE_UDP_REMOTE */
-
+// udp连接
 	if (connect(ctrl->s, (struct sockaddr *) &ctrl->dest,
 		    sizeof(ctrl->dest)) < 0) {
 #ifdef CONFIG_CTRL_IFACE_UDP_IPV6
@@ -439,13 +446,13 @@ struct wpa_ctrl * wpa_ctrl_open(const char *ctrl_path)
 		os_free(ctrl);
 		return NULL;
 	}
-
+// 发送GET_COOKIE
 	len = sizeof(buf) - 1;
 	if (wpa_ctrl_request(ctrl, "GET_COOKIE", 10, buf, &len, NULL) == 0) {
 		buf[len] = '\0';
 		ctrl->cookie = os_strdup(buf);
 	}
-
+// 发送IFNAME
 	if (wpa_ctrl_request(ctrl, "IFNAME", 6, buf, &len, NULL) == 0) {
 		buf[len] = '\0';
 		ctrl->remote_ifname = os_strdup(buf);
@@ -491,17 +498,23 @@ int wpa_ctrl_request(struct wpa_ctrl *ctrl, const char *cmd, size_t cmd_len,
 	size_t _cmd_len;
 
 #ifdef CONFIG_CTRL_IFACE_UDP
+// 有缓存
 	if (ctrl->cookie) {
 		char *pos;
+// 把cookie的内容也一起发送
 		_cmd_len = os_strlen(ctrl->cookie) + 1 + cmd_len;
 		cmd_buf = os_malloc(_cmd_len);
 		if (cmd_buf == NULL)
 			return -1;
 		_cmd = cmd_buf;
 		pos = cmd_buf;
+// 先复制cookie内容
 		os_strlcpy(pos, ctrl->cookie, _cmd_len);
+// 更新长度
 		pos += os_strlen(ctrl->cookie);
+// 添加' '
 		*pos++ = ' ';
+// 复制要发送的内容
 		os_memcpy(pos, cmd, cmd_len);
 	} else
 #endif /* CONFIG_CTRL_IFACE_UDP */
@@ -521,12 +534,15 @@ retry_send:
 			 * Must be a non-blocking socket... Try for a bit
 			 * longer before giving up.
 			 */
+// 获取发送的时间
 			if (started_at.sec == 0)
 				os_get_reltime(&started_at);
 			else {
 				struct os_reltime n;
+// 获取现在的时间
 				os_get_reltime(&n);
 				/* Try for a few seconds. */
+// 重试5秒钟
 				if (os_reltime_expired(&n, &started_at, 5))
 					goto send_err;
 			}
@@ -540,16 +556,20 @@ retry_send:
 	os_free(cmd_buf);
 
 	for (;;) {
+// 超时时间10秒
 		tv.tv_sec = 10;
 		tv.tv_usec = 0;
 		FD_ZERO(&rfds);
 		FD_SET(ctrl->s, &rfds);
 		res = select(ctrl->s + 1, &rfds, NULL, NULL, &tv);
+// 被中断时，就继续阻塞，等待读事件
 		if (res < 0 && errno == EINTR)
 			continue;
+// 错误返回
 		if (res < 0)
 			return res;
 		if (FD_ISSET(ctrl->s, &rfds)) {
+// 读取数据
 			res = recv(ctrl->s, reply, *reply_len, 0);
 			if (res < 0)
 				return res;
@@ -559,6 +579,7 @@ retry_send:
 				 * wpa_supplicant, not the reply to the
 				 * request. Use msg_cb to report this to the
 				 * caller. */
+// 返回'<'和'IFNAME='时,调用回调函数
 				if (msg_cb) {
 					/* Make sure the message is nul
 					 * terminated. */
@@ -626,6 +647,7 @@ int wpa_ctrl_pending(struct wpa_ctrl *ctrl)
 {
 	struct timeval tv;
 	fd_set rfds;
+// 监听fd,永久等待
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
 	FD_ZERO(&rfds);

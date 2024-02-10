@@ -11442,7 +11442,7 @@ static int wpas_ctrl_iface_send_dscp_query(struct wpa_supplicant *wpa_s,
 	return wpas_send_dscp_query(wpa_s, pos + 12, os_strlen(pos + 12));
 }
 
-
+// 处理wpa_cli发送过来的命令
 char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
 					 char *buf, size_t *resp_len)
 {
@@ -12985,7 +12985,7 @@ static int wpas_global_ctrl_iface_fst_detach(struct wpa_global *global,
 
 #endif /* CONFIG_FST */
 
-
+// 处理wpa_cli的各种命令，将数据返回
 char * wpa_supplicant_global_ctrl_iface_process(struct wpa_global *global,
 						char *buf, size_t *resp_len)
 {

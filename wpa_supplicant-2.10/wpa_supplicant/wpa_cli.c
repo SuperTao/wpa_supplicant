@@ -4351,7 +4351,7 @@ static void wpa_cli_action_cb(char *msg, size_t len)
 static int wpa_cli_open_global_ctrl(void)
 {
 #ifdef CONFIG_CTRL_IFACE_NAMED_PIPE
-	ctrl_conn = wpa_ctrl_open(NULL);
+	ctrl_conn = wpa_ctrl_open(NULL);	// 有名管道
 #else /* CONFIG_CTRL_IFACE_NAMED_PIPE */
 	ctrl_conn = wpa_ctrl_open(global);
 #endif /* CONFIG_CTRL_IFACE_NAMED_PIPE */
@@ -4361,13 +4361,15 @@ static int wpa_cli_open_global_ctrl(void)
 			global, strerror(errno));
 		return -1;
 	}
-
+// 交互模式
 	if (interactive) {
 		update_ifnames(ctrl_conn);
+// 创建socket
 		mon_conn = wpa_ctrl_open(global);
 		if (mon_conn) {
 			if (wpa_ctrl_attach(mon_conn) == 0) {
 				wpa_cli_attached = 1;
+// 注册eloop监听读数据。回调函数wpa_cli_mon_receive
 				eloop_register_read_sock(
 					wpa_ctrl_get_fd(mon_conn),
 					wpa_cli_mon_receive,
@@ -4503,11 +4505,13 @@ static void wpa_cli_recv_pending(struct wpa_ctrl *ctrl, int action_monitor)
 	while (wpa_ctrl_pending(ctrl) > 0) {
 		char buf[4096];
 		size_t len = sizeof(buf) - 1;
+// 读取数据
 		if (wpa_ctrl_recv(ctrl, buf, &len) == 0) {
 			buf[len] = '\0';
+// 处理返回值并打印
 			if (action_monitor)
 				wpa_cli_action_process(buf);
-			else {
+			else {		
 				cli_event(buf);
 				if (wpa_cli_show_event(buf)) {
 					edit_clear_line();
@@ -5008,7 +5012,7 @@ int main(int argc, char *argv[])
 
 	if (interactive)
 		printf("%s\n\n%s\n\n", wpa_cli_version, cli_license);
-
+	// 初始化eloop循环
 	if (eloop_init())
 		return -1;
 
@@ -5016,7 +5020,7 @@ int main(int argc, char *argv[])
 		return -1;
 
 	eloop_register_signal_terminate(wpa_cli_terminate, NULL);
-
+// 获取接口名称
 	if (ctrl_ifname == NULL)
 		ctrl_ifname = wpa_cli_get_default_ifname();
 
@@ -5036,6 +5040,7 @@ int main(int argc, char *argv[])
 			}
 		}
 	} else if (interactive) {
+// 交互模式
 		wpa_cli_interactive();
 	} else {
 		if (!global &&
