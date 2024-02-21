@@ -590,6 +590,10 @@ static int _wpa_ctrl_command(struct wpa_ctrl *ctrl, const char *cmd, int print)
  
 - wpa_supplicant接受数据并返回
 
+  wpa_supplicant里面eloop注册，监听socket。接收wpa_cli的数据进行数据
+
+  eloop_register_read_sock(priv->sock, wpa_supplicant_ctrl_iface_receive);
+
 ctrl_iface_udp.c
 ```
 static void wpa_supplicant_ctrl_iface_receive(int sock, void *eloop_ctx,
