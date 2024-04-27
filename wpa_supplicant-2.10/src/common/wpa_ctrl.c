@@ -344,7 +344,7 @@ struct wpa_ctrl * wpa_ctrl_open(const char *ctrl_path)
 #else /* CONFIG_CTRL_IFACE_UDP_IPV6 */
 	ctrl->local.sin_family = AF_INET;
 #ifdef CONFIG_CTRL_IFACE_UDP_REMOTE
-// 远端地址设置
+// 本地地址设置
 	ctrl->local.sin_addr.s_addr = INADDR_ANY;
 #else /* CONFIG_CTRL_IFACE_UDP_REMOTE */
 	ctrl->local.sin_addr.s_addr = htonl((127 << 24) | 1);
@@ -419,6 +419,7 @@ struct wpa_ctrl * wpa_ctrl_open(const char *ctrl_path)
 		ctrl->dest.sin6_port = htons(port_id);
 		os_memcpy(&ctrl->dest.sin6_addr, h->h_addr, h->h_length);
 #else /* CONFIG_CTRL_IFACE_UDP_IPV6 */
+// 远端地址
 		ctrl->dest.sin_port = htons(port_id);
 		os_memcpy(&ctrl->dest.sin_addr.s_addr, h->h_addr, h->h_length);
 #endif /* CONFIG_CTRL_IFACE_UDP_IPV6 */
@@ -528,6 +529,7 @@ int wpa_ctrl_request(struct wpa_ctrl *ctrl, const char *cmd, size_t cmd_len,
 	started_at.usec = 0;
 retry_send:
 	if (send(ctrl->s, _cmd, _cmd_len, 0) < 0) {
+// 收到信号
 		if (errno == EAGAIN || errno == EBUSY || errno == EWOULDBLOCK)
 		{
 			/*
@@ -542,7 +544,7 @@ retry_send:
 // 获取现在的时间
 				os_get_reltime(&n);
 				/* Try for a few seconds. */
-// 重试5秒钟
+// 判断是否查过重试的时间，5秒内资源忙，进行重试
 				if (os_reltime_expired(&n, &started_at, 5))
 					goto send_err;
 			}

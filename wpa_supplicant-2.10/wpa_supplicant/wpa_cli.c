@@ -128,7 +128,7 @@ static int wpa_cli_open_connection(const char *ifname, int attach)
 	ctrl_conn = wpa_ctrl_open(ifname);
 	if (ctrl_conn == NULL)
 		return -1;
-
+	// 交互模式
 	if (attach && interactive)
 		mon_conn = wpa_ctrl_open(ifname);
 	else
@@ -160,6 +160,7 @@ static int wpa_cli_open_connection(const char *ifname, int attach)
 		cfile = os_malloc(flen);
 		if (cfile == NULL)
 			return -1;
+// /var/run/wpa_supplicant/wlan0
 		res = os_snprintf(cfile, flen, "%s/%s", ctrl_iface_dir,
 				  ifname);
 		if (os_snprintf_error(flen, res)) {
@@ -182,9 +183,11 @@ static int wpa_cli_open_connection(const char *ifname, int attach)
 #endif /* CONFIG_CTRL_IFACE_UDP || CONFIG_CTRL_IFACE_NAMED_PIPE */
 
 	if (mon_conn) {
+// 发送ATTACH命令
 		if (wpa_ctrl_attach(mon_conn) == 0) {
 			wpa_cli_attached = 1;
 			if (interactive)
+// 接受事件回调
 				eloop_register_read_sock(
 					wpa_ctrl_get_fd(mon_conn),
 					wpa_cli_mon_receive, NULL, NULL);
@@ -3255,8 +3258,8 @@ static int wpa_cli_cmd_dscp_query(struct wpa_ctrl *ctrl, int argc, char *argv[])
 
 
 enum wpa_cli_cmd_flags {
-	cli_cmd_flag_none		= 0x00,
-	cli_cmd_flag_sensitive		= 0x01
+	cli_cmd_flag_none		= 0x00,		// 普通标志
+	cli_cmd_flag_sensitive		= 0x01	// 敏感标志
 };
 
 struct wpa_cli_cmd {
@@ -3266,7 +3269,7 @@ struct wpa_cli_cmd {
 	enum wpa_cli_cmd_flags flags;
 	const char *usage;
 };
-
+// wpa_cli支持的命令
 static const struct wpa_cli_cmd wpa_cli_commands[] = {
 	{ "status", wpa_cli_cmd_status, NULL,
 	  cli_cmd_flag_none,
@@ -3986,6 +3989,7 @@ static void print_cmd_help(const struct wpa_cli_cmd *cmd, const char *pad)
 	size_t n;
 
 	printf("%s%s ", pad, cmd->cmd);
+	// 按字符打印usage字符串，直到字符串为空
 	for (n = 0; (c = cmd->usage[n]); n++) {
 		printf("%c", c);
 		if (c == '\n')
@@ -3994,12 +3998,14 @@ static void print_cmd_help(const struct wpa_cli_cmd *cmd, const char *pad)
 	printf("\n");
 }
 
-
+// 打印所有的命令使用方法，或者某一条命令的使用方法
 static void print_help(const char *cmd)
 {
 	int n;
 	printf("commands:\n");
 	for (n = 0; wpa_cli_commands[n].cmd; n++) {
+		// cmd == NULL时，每一条命令都打印
+		// cmd匹配上，只打印一条命令
 		if (cmd == NULL || str_starts(wpa_cli_commands[n].cmd, cmd))
 			print_cmd_help(&wpa_cli_commands[n], "  ");
 	}
@@ -4123,7 +4129,9 @@ static int wpa_request(struct wpa_ctrl *ctrl, int argc, char *argv[])
 	int ret = 0;
 
 	if (argc > 1 && os_strncasecmp(argv[0], "IFNAME=", 7) == 0) {
+// 获取接口名称
 		ifname_prefix = argv[0] + 7;
+// 参数个数减1
 		argv = &argv[1];
 		argc--;
 	} else
@@ -4135,9 +4143,11 @@ static int wpa_request(struct wpa_ctrl *ctrl, int argc, char *argv[])
 	count = 0;
 	cmd = wpa_cli_commands;
 	while (cmd->cmd) {
+// 命令匹配，忽略大小写差异，只匹配固定长度
 		if (os_strncasecmp(cmd->cmd, argv[0], os_strlen(argv[0])) == 0)
 		{
 			match = cmd;
+// 继续匹配，进行大小，长度匹配
 			if (os_strcasecmp(cmd->cmd, argv[0]) == 0) {
 				/* we have an exact match */
 				count = 1;
@@ -4164,6 +4174,7 @@ static int wpa_request(struct wpa_ctrl *ctrl, int argc, char *argv[])
 		printf("Unknown command '%s'\n", argv[0]);
 		ret = 1;
 	} else {
+		// 命令执行
 		ret = match->handler(ctrl, argc - 1, &argv[1]);
 	}
 
@@ -4406,7 +4417,7 @@ static void wpa_cli_reconnect(void)
 static void cli_event(const char *str)
 {
 	const char *start, *s;
-
+// 查找'>'字符
 	start = os_strchr(str, '>');
 	if (start == NULL)
 		return;
@@ -4420,6 +4431,7 @@ static void cli_event(const char *str)
 		s = os_strchr(s + 1, ' ');
 		if (s == NULL)
 			return;
+// 将bss添加到链表
 		cli_txt_list_add(&bsses, s + 1);
 		return;
 	}
@@ -4431,6 +4443,7 @@ static void cli_event(const char *str)
 		s = os_strchr(s + 1, ' ');
 		if (s == NULL)
 			return;
+// 将bss从链表删除
 		cli_txt_list_del_addr(&bsses, s + 1);
 		return;
 	}
@@ -4504,6 +4517,7 @@ static void wpa_cli_recv_pending(struct wpa_ctrl *ctrl, int action_monitor)
 		wpa_cli_reconnect();
 		return;
 	}
+// select监听socket
 	while (wpa_ctrl_pending(ctrl) > 0) {
 		char buf[4096];
 		size_t len = sizeof(buf) - 1;
@@ -4774,7 +4788,7 @@ static void try_connection(void *eloop_ctx, void *timeout_ctx)
 {
 	if (ctrl_conn)
 		goto done;
-
+// 获取接口名称
 	if (ctrl_ifname == NULL)
 		ctrl_ifname = wpa_cli_get_default_ifname();
 
@@ -4805,7 +4819,7 @@ done:
 static void wpa_cli_interactive(void)
 {
 	printf("\nInteractive mode\n\n");
-
+// 交互模式进行连接
 	eloop_register_timeout(0, 0, try_connection, NULL, NULL);
 // 事件循环
 	eloop_run();
